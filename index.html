@@ -1,0 +1,431 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>北森测评题库 · 刷题</title>
+<style>
+:root{--bg:#f5f6fa;--card:#fff;--pri:#4f6ef7;--ok:#22a06b;--err:#e5484d;--txt:#1c2333;--sub:#6b7280;--bd:#e5e7eb}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+body{font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif;background:var(--bg);color:var(--txt);font-size:16px;line-height:1.65}
+.wrap{max-width:720px;margin:0 auto;padding:16px 14px 90px}
+header{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px}
+header h1{font-size:19px}
+.btn{display:inline-block;border:none;border-radius:10px;padding:10px 16px;font-size:15px;cursor:pointer;background:var(--pri);color:#fff}
+.btn.ghost{background:#eef1fe;color:var(--pri)}
+.btn.sm{padding:6px 12px;font-size:13px;border-radius:8px}
+.card{background:var(--card);border-radius:14px;padding:16px;box-shadow:0 1px 4px rgba(0,0,0,.06);margin-bottom:12px}
+/* home */
+.secbtn{display:flex;justify-content:space-between;align-items:center;padding:15px 16px;border:1px solid var(--bd);border-radius:12px;margin-bottom:10px;cursor:pointer;background:#fff}
+.secbtn:active{background:#f0f2ff}
+.secbtn b{font-size:16px}
+.secbtn .meta{font-size:13px;color:var(--sub)}
+.pill{font-size:12px;background:#eef1fe;color:var(--pri);border-radius:99px;padding:2px 10px}
+.row{display:flex;gap:10px;flex-wrap:wrap}
+.row .btn{flex:1;text-align:center}
+.stat{display:flex;gap:8px;text-align:center;margin-bottom:12px}
+.stat>div{flex:1;background:#fff;border-radius:12px;padding:12px 4px;box-shadow:0 1px 4px rgba(0,0,0,.05)}
+.stat b{font-size:20px;display:block}
+.stat span{font-size:12px;color:var(--sub)}
+.bar{height:8px;background:#e9ecf5;border-radius:99px;overflow:hidden;margin:8px 0 4px}
+.bar>i{display:block;height:100%;background:var(--pri);border-radius:99px}
+/* quiz */
+.qhead{display:flex;justify-content:space-between;align-items:center;font-size:13px;color:var(--sub);margin-bottom:10px}
+.stem{font-size:16px;margin-bottom:12px;white-space:pre-wrap}
+.stem img,.opts img,.jiexi img{max-width:100%;border:1px solid var(--bd);border-radius:8px;margin:6px 0;display:block}
+.opt{display:flex;gap:10px;padding:12px 14px;border:1.5px solid var(--bd);border-radius:12px;margin-bottom:10px;cursor:pointer;background:#fff;font-size:15px}
+.opt:active{border-color:var(--pri)}
+.opt .tag{font-weight:700;color:var(--pri);flex-shrink:0}
+.opt.sel{border-color:var(--pri);background:#eef1fe}
+.opt.right{border-color:var(--ok);background:#e6f7ef}
+.opt.wrong{border-color:var(--err);background:#fdecec}
+.opt.dim{opacity:.55}
+.result{border-radius:12px;padding:12px 14px;margin:12px 0;font-size:15px}
+.result.ok{background:#e6f7ef;color:var(--ok)}
+.result.err{background:#fdecec;color:var(--err)}
+.jiexi{background:#f8f9fc;border:1px solid var(--bd);border-radius:12px;padding:12px 14px;font-size:14.5px;color:#374151;margin-bottom:12px}
+.jiexi b{color:var(--txt)}
+.foot{position:fixed;bottom:0;left:0;right:0;background:#fff;border-top:1px solid var(--bd);padding:10px 14px calc(10px + env(safe-area-inset-bottom))}
+.foot .inner{max-width:720px;margin:0 auto;display:flex;gap:10px}
+.foot .btn{flex:1;text-align:center}
+.imgnote{font-size:13px;color:var(--sub);background:#fffbe8;border:1px solid #f4e3a1;border-radius:8px;padding:8px 10px;margin-bottom:10px}
+.back{cursor:pointer;color:var(--pri);font-size:14px}
+.empty{text-align:center;color:var(--sub);padding:50px 0}
+.gridnav{display:grid;grid-template-columns:repeat(auto-fill,minmax(44px,1fr));gap:8px}
+.gridnav .cell{aspect-ratio:1;display:flex;align-items:center;justify-content:center;border-radius:10px;border:1px solid var(--bd);font-size:13px;cursor:pointer;background:#fff}
+.cell.done-ok{background:#e6f7ef;border-color:#b7e4cf;color:var(--ok)}
+.cell.done-err{background:#fdecec;border-color:#f5c2c4;color:var(--err)}
+.cell.cur{outline:2px solid var(--pri)}
+</style>
+</head>
+<body>
+<div class="wrap" id="app"><div class="empty">加载题库中…</div></div>
+<script>
+let QS=[],state={},view={page:'home'};
+let TIMER=null,TLEFT=0;const TLIMIT=60;
+function stopTimer(){if(TIMER){clearInterval(TIMER);TIMER=null}}
+function startTimer(){stopTimer();TLEFT=TLIMIT;updTimer();TIMER=setInterval(()=>{TLEFT--;updTimer();if(TLEFT<=0){stopTimer();timeUp()}},1000)}
+function updTimer(){const el=document.getElementById('q-timer');if(el){el.textContent='⏱ '+TLEFT+'s';el.style.color=TLEFT<=10?'var(--err)':'var(--sub)';el.style.fontWeight=TLEFT<=10?'700':'400'}}
+function timeUp(){
+  if(view.answered)return;
+  view.answered='timeout';
+  const q=view.list[view.idx];
+  view.sessionRec=view.sessionRec||{};view.sessionRec[q.id]=0;
+  state.rec[q.id]=0;
+  state.wrongEver[q.id]=1;
+  if(view.o.mode==='seq')state.last[view.o.sec]=q.id;
+  save();
+  reveal(null,false,true);
+}
+const SECS=['言语理解','资料分析','图形推理'];
+const LS='bs_tiku_v1';
+const SYNC_BASE='https://mantledb.sh/v2/beisen-tiku-3251d869adf74743f0a8';
+function syncUrl(){return SYNC_BASE+'/user-'+encodeURIComponent(state.user)}
+const SYNC_KEY='2a2dafafb1012c348299de6b2b6d5f529e4630c3690539a028447b72abedc2f9';
+let syncTimer=null,syncStatus='☁️ 连接云端…';
+function updSyncBadge(){const el=document.getElementById('sync-badge');if(el)el.textContent=syncStatus}
+function cloudPush(){
+  if(!state.user)return;
+  fetch(syncUrl(),{method:'POST',headers:{'Content-Type':'application/json','X-Mantle-Key':SYNC_KEY},body:JSON.stringify({rec:state.rec,last:state.last,wrongEver:state.wrongEver,t:Date.now()})})
+  .then(r=>{syncStatus=r.ok?'☁️ 已同步云端 '+new Date().toLocaleTimeString('zh-CN',{hour:'2-digit',minute:'2-digit'}):'⚠️ 云同步失败（本地已保存）';updSyncBadge()})
+  .catch(()=>{syncStatus='⚠️ 离线（本地已保存）';updSyncBadge()});
+}
+function cloudPull(){if(!state.user)return Promise.resolve(null);return fetch(syncUrl(),{headers:{'X-Mantle-Key':SYNC_KEY}}).then(r=>r.ok?r.json():null).catch(()=>null)}
+function mergeCloud(c){
+  if(!c||typeof c!=='object'||!c.rec)return 0;
+  let n=0;
+  Object.entries(c.rec||{}).forEach(([k,v])=>{if(state.rec[k]===undefined){state.rec[k]=v;n++}});
+  Object.keys(c.wrongEver||{}).forEach(k=>{if(!state.wrongEver[k]){state.wrongEver[k]=1;n++}});
+  Object.entries(c.last||{}).forEach(([k,v])=>{if(state.last[k]===undefined)state.last[k]=v});
+  return n;
+}
+function load(){try{state=JSON.parse(localStorage.getItem(LS))||{}}catch(e){state={}};state.rec=state.rec||{};state.last=state.last||{};
+  if(!state.wrongEver){state.wrongEver={};Object.keys(state.rec).forEach(id=>{if(state.rec[id]===0)state.wrongEver[id]=1})}}
+function save(){localStorage.setItem(LS,JSON.stringify(state));clearTimeout(syncTimer);syncTimer=setTimeout(cloudPush,1500)}
+const $=h=>{const d=document.createElement('div');d.innerHTML=h;return d.firstElementChild};
+const app=document.getElementById('app');
+const esc=s=>(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;');
+
+function bootSync(){
+  cloudPull().then(c=>{
+    if(c===null){syncStatus='⚠️ 云端连不上（不影响使用）';updSyncBadge();return}
+    const n=mergeCloud(c);
+    syncStatus='☁️ 已同步云端 '+new Date().toLocaleTimeString('zh-CN',{hour:'2-digit',minute:'2-digit'});
+    if(n>0){localStorage.setItem(LS,JSON.stringify(state));clearTimeout(syncTimer);syncTimer=setTimeout(cloudPush,1500);if(view.page==='home'){home();return}}
+    updSyncBadge();
+  });
+}
+fetch('questions.json').then(r=>r.json()).then(d=>{QS=d;load();if(state.user){home();bootSync()}else profileView()});
+function profileView(){
+  view={page:'profile'};
+  app.innerHTML=`<header><h1>📚 北森测评题库</h1></header>
+  <div class="card" style="text-align:center;padding:28px 16px">
+    <div style="font-size:40px">👤</div>
+    <div style="font-size:17px;font-weight:700;margin:10px 0 4px">你是谁呀？</div>
+    <div style="font-size:13.5px;color:var(--sub);margin-bottom:14px">输入一个昵称，做题记录会存到你自己的云端存档。<br>换设备时输入<b>同一个昵称</b>就能找回进度。</div>
+    <input id="p-name" placeholder="比如：小美" maxlength="16" style="width:100%;border:1.5px solid var(--bd);border-radius:10px;padding:12px;font-size:16px;text-align:center">
+    <button class="btn" id="p-go" style="width:100%;margin-top:12px">开始刷题 →</button>
+  </div>`;
+  const go=()=>{
+    const v=document.getElementById('p-name').value.trim();
+    if(!v){alert('输入个昵称嘛');return}
+    state.user=v;save();home();bootSync();
+  };
+  document.getElementById('p-go').onclick=go;
+  document.getElementById('p-name').onkeydown=e=>{if(e.key==='Enter')go()};
+}
+
+function counts(sec){
+  const list=QS.filter(q=>sec==='all'||q.section===sec);
+  let ok=0,err=0;
+  list.forEach(q=>{const r=state.rec[q.id];if(r===1)ok++;else if(r===0)err++});
+  return{total:list.length,ok,err,done:ok+err};
+}
+function wrongList(){return QS.filter(q=>state.wrongEver[q.id])}
+function doneList(){return QS.filter(q=>state.rec[q.id]!==undefined)}
+
+function home(){
+  stopTimer();
+  view={page:'home'};
+  const all=counts('all'),wl=wrongList().length,dl=doneList().length;
+  let h=`<header><h1>📚 北森测评题库</h1><span class="pill" id="who" style="cursor:pointer">👤 ${state.user||'?'}</span></header>
+  <div class="stat">
+    <div><b>${all.done}</b><span>已刷</span></div>
+    <div><b style="color:var(--ok)">${all.ok}</b><span>答对</span></div>
+    <div><b style="color:var(--err)">${all.err}</b><span>答错</span></div>
+    <div><b>${all.done?Math.round(all.ok/all.done*100):0}%</b><span>正确率</span></div>
+  </div>
+  <div class="card"><div class="bar"><i style="width:${all.total?all.done/all.total*100:0}%"></i></div>
+  <span style="font-size:13px;color:var(--sub)">总进度 ${all.done}/${all.total}</span><span id="sync-badge" style="float:right;font-size:12px;color:var(--sub)">${syncStatus}</span></div>`;
+  SECS.forEach(s=>{
+    const c=counts(s);
+    h+=`<div class="secbtn" data-sec="${s}"><div><b>${s}</b><div class="meta">${c.done}/${c.total} · 正确率 ${c.done?Math.round(c.ok/c.done*100):0}%</div></div><span style="color:var(--pri)">刷题 ›</span></div>`;
+  });
+  h+=`<div class="row" style="margin-top:14px">
+    <button class="btn" id="btn-train">🏋️ 训练模式（各题型10题）</button>
+  </div>
+  <div class="row" style="margin-top:10px">
+    <button class="btn ghost" id="btn-rand">🎲 随机刷题（各题型15题）</button>
+    <button class="btn ghost" id="btn-wrong">📕 错题本 (${wl})</button>
+  </div>
+  <div class="row" style="margin-top:10px">
+    <button class="btn ghost" id="btn-done">📖 已刷题练习 (${dl})</button>
+    <button class="btn ghost" id="btn-nav">🗺 题目总览</button>
+  </div>
+  <div class="row" style="margin-top:10px">
+    <button class="btn ghost" id="btn-sync">☁️ 换设备同步</button>
+    <button class="btn ghost" id="btn-reset" style="color:var(--err);background:#fdecec">清空记录</button>
+  </div>`;
+  app.innerHTML=h;
+  document.getElementById('who').onclick=()=>{if(confirm('切换用户？当前记录已存在「'+state.user+'」的云端存档里，切换后输入原昵称可随时找回。')){clearTimeout(syncTimer);localStorage.removeItem(LS);location.reload()}};
+  document.querySelectorAll('.secbtn').forEach(el=>el.onclick=()=>startQuiz({sec:el.dataset.sec,mode:'seq'}));
+  document.getElementById('btn-train').onclick=()=>startTrain();
+  document.getElementById('btn-rand').onclick=()=>startQuiz({sec:'all',mode:'rand'});
+  document.getElementById('btn-wrong').onclick=()=>startQuiz({sec:'all',mode:'wrong'});
+  document.getElementById('btn-done').onclick=()=>startQuiz({sec:'all',mode:'done'});
+  document.getElementById('btn-nav').onclick=navView;
+  document.getElementById('btn-sync').onclick=syncView;
+  document.getElementById('btn-reset').onclick=()=>{if(confirm('确定清空全部做题记录？')){state={rec:{},last:{},wrongEver:{},user:state.user};save();home()}};
+}
+
+function sample(arr,n){const a=[...arr];for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]]}return a.slice(0,n)}
+function hashStr(s){let h=0;for(let i=0;i<s.length;i++)h=(h*31+s.charCodeAt(i))>>>0;return h}
+function seededShuffle(arr,seed){const a=[...arr];let s=(seed>>>0)||1;const rnd=()=>{s=(s*1664525+1013904223)>>>0;return s/4294967296};for(let i=a.length-1;i>0;i--){const j=Math.floor(rnd()*(i+1));[a[i],a[j]]=[a[j],a[i]]}return a}
+function startTrain(){
+  let list=[];
+  SECS.forEach(s=>{list=list.concat(sample(QS.filter(q=>q.section===s),10))});
+  list=sample(list,list.length);
+  if(!list.length){alert('题库为空');return}
+  view={page:'quiz',o:{sec:'train',mode:'train'},list,idx:0,answered:null};
+  renderQ();window.scrollTo(0,0);
+}
+function buildList(o){
+  let list=QS.filter(q=>o.sec==='all'||q.section===o.sec);
+  if(o.mode==='seq'){
+    if(!state.seed){state.seed=Math.floor(Math.random()*1e9)+1;save()}
+    list=seededShuffle(list,state.seed+hashStr(o.sec));
+  }
+  if(o.mode==='wrong')list=sample(wrongList(),QS.length);
+  if(o.mode==='done')list=sample(doneList(),QS.length);
+  if(o.mode==='rand'){
+    if(o.sec==='all'){list=[];SECS.forEach(s=>{list=list.concat(sample(QS.filter(q=>q.section===s),15))})}
+    else{list=sample(list,15)}
+    list=sample(list,list.length);
+  }
+  return list;
+}
+function startQuiz(o){
+  const list=buildList(o);
+  if(!list.length){alert(o.mode==='wrong'?'错题本是空的，先去刷题吧！':o.mode==='done'?'还没刷过题，先去刷题吧！':'没有题目');return}
+  let idx=0;
+  if(o.mode==='seq'){
+    const lastId=state.last[o.sec];
+    if(lastId){const i=list.findIndex(q=>q.id===lastId);if(i>=0&&i<list.length-1)idx=i+(state.rec[lastId]!==undefined?1:0)}
+  }
+  view={page:'quiz',o,list,idx,answered:null};
+  renderQ();
+}
+function renderQ(){
+  const {list,idx,o}=view;
+  const q=list[idx];
+  const r=state.rec[q.id];
+  const isFig=q.section==='图形推理';
+  const hasTextOpts=Object.keys(q.options).length>0;
+  let h=`<header><span class="back" id="q-back">‹ 返回</span><span style="font-size:13px;color:var(--sub)">${q.section} · 第 ${q.no} 题　<span id="q-timer"></span></span><span class="pill">${idx+1}/${list.length}</span></header>
+  <div class="card">
+  <div class="stem">${esc(q.stem)}</div>`;
+  q.stem_imgs.forEach(f=>h+=`<img src="img/${f}" loading="lazy">`);
+  if(isFig&&!hasTextOpts)h+=`<div class="imgnote">🖼 图中选项从上往下依次为 A、B、C、D${''}（可能含 E），看图作答</div>`;
+  q.opt_imgs.forEach(f=>h+=`<img src="img/${f}" loading="lazy">`);
+  h+=`<div class="opts" id="opts">`;
+  view.dmap=null;
+  if(hasTextOpts){
+    const order=sample(Object.keys(q.options).sort(),9);
+    view.dmap={};
+    order.forEach((L,i)=>{
+      const D='ABCDE'[i];view.dmap[L]=D;
+      h+=`<div class="opt" data-l="${L}"><span class="tag">${D}</span><span>${esc(q.options[L])}</span></div>`;
+    });
+  }else{
+    ['A','B','C','D','E'].slice(0,q.answer>'D'?5:4).forEach(L=>{
+      h+=`<div class="opt" data-l="${L}"><span class="tag">${L}</span><span>选 ${L}</span></div>`;
+    });
+  }
+  h+=`</div><div style="text-align:right;margin-bottom:4px"><span id="q-peek" style="font-size:13px;color:var(--sub);cursor:pointer;text-decoration:underline">👀 直接看答案</span></div><div id="feedback"></div></div>`;
+  app.innerHTML=h+`<div class="foot"><div class="inner">
+    <button class="btn ghost" id="q-prev" ${idx===0?'disabled style="opacity:.4"':''}>上一题</button>
+    <button class="btn" id="q-next">${idx===list.length-1?'完成':'下一题'}</button>
+  </div></div>`;
+  document.getElementById('q-back').onclick=home;
+  document.getElementById('q-prev').onclick=()=>{if(idx>0){view.idx--;view.answered=null;renderQ()}};
+  document.getElementById('q-next').onclick=()=>{
+    if(idx===list.length-1){
+      if(o.mode==='train'){trainSummary();return}
+      home();return;
+    }
+    view.idx++;view.answered=null;renderQ();window.scrollTo(0,0);
+  };
+  document.querySelectorAll('.opt').forEach(el=>el.onclick=()=>answer(el.dataset.l));
+  const pk=document.getElementById('q-peek');if(pk)pk.onclick=peek;
+  stopTimer();
+  if(r!==undefined&&o.mode==='seq')reveal(null,true);
+  else if(!view.answered)startTimer();
+}
+function ansLabel(q){
+  const d=view.dmap?view.dmap[q.answer]:q.answer;
+  return d!==q.answer?d+'（原题为 '+q.answer+'）':d;
+}
+function jiexiNote(){
+  return view.dmap?`<span style="color:var(--sub);font-size:12.5px">（本题选项已打乱，解析中的字母按原题顺序）</span>`:'';
+}
+function peek(){
+  if(view.answered)return;
+  stopTimer();
+  view.answered='peek';
+  const q=view.list[view.idx];
+  document.querySelectorAll('.opt').forEach(el=>{el.onclick=null;if(el.dataset.l===q.answer)el.classList.add('right');else el.classList.add('dim')});
+  let fb=`<div class="result ok">👀 正确答案 ${ansLabel(q)}（背题模式，不计入统计）</div>`;
+  if(q.jiexi||q.jiexi_imgs.length){
+    fb+=`<div class="jiexi"><b>💡 解析：</b>${jiexiNote()}${esc(q.jiexi)||'（无文字解析）'}`;
+    q.jiexi_imgs.forEach(f=>fb+=`<img src="img/${f}" loading="lazy">`);
+    fb+=`</div>`;
+  }
+  document.getElementById('feedback').innerHTML=fb;
+}
+function answer(L){
+  if(view.answered)return;
+  stopTimer();
+  view.answered=L;
+  const q=view.list[view.idx];
+  const ok=L===q.answer;
+  view.sessionRec=view.sessionRec||{};view.sessionRec[q.id]=ok?1:0;
+  state.rec[q.id]=ok?1:0;
+  if(!ok)state.wrongEver[q.id]=1;
+  if(view.o.mode==='seq')state.last[view.o.sec]=q.id;
+  save();
+  reveal(L,false);
+}
+function reveal(L,past,timeout){
+  const q=view.list[view.idx];
+  document.querySelectorAll('.opt').forEach(el=>{
+    const l=el.dataset.l;
+    el.onclick=null;
+    if(l===q.answer)el.classList.add('right');
+    else if(l===L)el.classList.add('wrong');
+    else el.classList.add('dim');
+  });
+  const ok=past?state.rec[q.id]===1:(L===q.answer);
+  const A=ansLabel(q);
+  let fb=timeout?`<div class="result err">⏰ 超时（60秒），本题判错 · 正确答案 ${A}</div>`
+           :past?`<div class="result ${ok?'ok':'err'}">${ok?'✅ 之前答对了':'❌ 之前答错了'} · 正确答案 ${A}</div>`
+           :`<div class="result ${ok?'ok':'err'}">${ok?'🎉 回答正确！':'❌ 答错了'} · 正确答案 ${A}</div>`;
+  if(q.jiexi||q.jiexi_imgs.length){
+    fb+=`<div class="jiexi"><b>💡 解析：</b>${jiexiNote()}${esc(q.jiexi)||'（无文字解析）'}`;
+    q.jiexi_imgs.forEach(f=>fb+=`<img src="img/${f}" loading="lazy">`);
+    fb+=`</div>`;
+  }
+  document.getElementById('feedback').innerHTML=fb;
+}
+function trainSummary(){
+  stopTimer();
+  const rec=view.sessionRec||{};
+  const bySec={};
+  view.list.forEach(q=>{
+    bySec[q.section]=bySec[q.section]||{ok:0,done:0,total:0};
+    bySec[q.section].total++;
+    if(rec[q.id]!==undefined){bySec[q.section].done++;if(rec[q.id]===1)bySec[q.section].ok++}
+  });
+  let ok=0,done=0;
+  Object.values(bySec).forEach(v=>{ok+=v.ok;done+=v.done});
+  const pct=done?Math.round(ok/done*100):0;
+  const emoji=pct>=90?'🏆':pct>=70?'🎉':pct>=50?'💪':'📚';
+  let h=`<header><span class="back" id="t-back">‹ 返回首页</span><h1 style="font-size:17px">训练成绩</h1><span></span></header>
+  <div class="card" style="text-align:center">
+    <div style="font-size:44px">${emoji}</div>
+    <div style="font-size:26px;font-weight:700;margin:6px 0">${ok} / ${done}</div>
+    <div style="color:var(--sub)">正确率 ${pct}%${done<view.list.length?` · 未作答 ${view.list.length-done} 题`:''}</div>
+  </div><div class="card">`;
+  Object.entries(bySec).forEach(([s,v])=>{
+    const p=v.done?Math.round(v.ok/v.done*100):0;
+    h+=`<div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--bd)"><b>${s}</b><span>${v.ok}/${v.done} · ${p}%</span></div>`;
+  });
+  h+=`</div><div class="row">
+    <button class="btn" id="t-again">🏋️ 再来一组</button>
+    <button class="btn ghost" id="t-home">返回首页</button>
+  </div>`;
+  app.innerHTML=h;
+  document.getElementById('t-back').onclick=home;
+  document.getElementById('t-home').onclick=home;
+  document.getElementById('t-again').onclick=startTrain;
+  window.scrollTo(0,0);
+}
+function encState(){return btoa(unescape(encodeURIComponent(JSON.stringify(state))))}
+function decState(code){return JSON.parse(decodeURIComponent(escape(atob(code.trim()))))}
+function syncView(){
+  stopTimer();
+  const all=counts('all');
+  let h=`<header><span class="back" id="s-back">‹ 返回</span><h1 style="font-size:17px">☁️ 换设备同步</h1><span></span></header>
+  <div class="card">
+    <b>☁️ 自动云同步已开启</b>
+    <div style="font-size:13.5px;color:var(--sub);margin:6px 0 4px">做题记录会自动同步到云端。换设备打开本网页，输入同一个昵称（当前：<b>${state.user||''}</b>），进度自动恢复。下面的「进度码」是备用方案（云端故障时用）。</div>
+  </div>
+  <div class="card">
+    <b>📤 备用：手动导出进度</b>
+    <div style="font-size:13.5px;color:var(--sub);margin:6px 0 10px">当前进度：已刷 ${all.done} 题 · 错题本 ${wrongList().length} 题。点下面按钮复制「进度码」，发到微信/备忘录带到新设备。</div>
+    <textarea id="s-out" readonly style="width:100%;height:72px;border:1px solid var(--bd);border-radius:10px;padding:8px;font-size:12px;word-break:break-all">${encState()}</textarea>
+    <button class="btn" id="s-copy" style="width:100%;margin-top:8px">📋 复制进度码</button>
+  </div>
+  <div class="card">
+    <b>📥 新设备：导入进度</b>
+    <div style="font-size:13.5px;color:var(--sub);margin:6px 0 10px">把旧设备复制的进度码粘贴到下面，点导入。会和本机记录自动合并，不会丢数据。</div>
+    <textarea id="s-in" placeholder="粘贴进度码…" style="width:100%;height:72px;border:1px solid var(--bd);border-radius:10px;padding:8px;font-size:12px"></textarea>
+    <button class="btn" id="s-imp" style="width:100%;margin-top:8px">📥 导入并合并</button>
+  </div>`;
+  app.innerHTML=h;
+  document.getElementById('s-back').onclick=home;
+  document.getElementById('s-copy').onclick=()=>{
+    const t=document.getElementById('s-out');t.select();t.setSelectionRange(0,999999);
+    const done=()=>{const b=document.getElementById('s-copy');b.textContent='✅ 已复制，去发给自己吧';setTimeout(()=>b.textContent='📋 复制进度码',2500)};
+    if(navigator.clipboard&&navigator.clipboard.writeText)navigator.clipboard.writeText(t.value).then(done).catch(()=>{document.execCommand('copy');done()});
+    else{document.execCommand('copy');done()}
+  };
+  document.getElementById('s-imp').onclick=()=>{
+    const v=document.getElementById('s-in').value;
+    if(!v.trim()){alert('先粘贴进度码');return}
+    let inc;try{inc=decState(v)}catch(e){alert('进度码不对，检查有没有复制完整');return}
+    if(!inc||typeof inc!=='object'||!inc.rec){alert('进度码内容无效');return}
+    Object.assign(state.rec,inc.rec||{});
+    Object.assign(state.wrongEver,inc.wrongEver||{});
+    Object.assign(state.last,inc.last||{});
+    save();
+    alert('✅ 导入成功！已合并 '+Object.keys(inc.rec||{}).length+' 条做题记录');
+    home();
+  };
+  window.scrollTo(0,0);
+}
+function navView(){
+  stopTimer();
+  let h=`<header><span class="back" id="n-back">‹ 返回</span><h1 style="font-size:17px">题目总览</h1><span></span></header>`;
+  SECS.forEach(s=>{
+    const list=QS.filter(q=>q.section===s);
+    h+=`<div class="card"><b>${s}</b><div class="gridnav" style="margin-top:10px">`;
+    list.forEach(q=>{
+      const r=state.rec[q.id];
+      h+=`<div class="cell ${r===1?'done-ok':r===0?'done-err':''}" data-id="${q.id}">${q.no}</div>`;
+    });
+    h+=`</div></div>`;
+  });
+  app.innerHTML=h;
+  document.getElementById('n-back').onclick=home;
+  document.querySelectorAll('.cell').forEach(el=>el.onclick=()=>{
+    const id=+el.dataset.id;
+    const q=QS.find(x=>x.id===id);
+    let list=QS.filter(x=>x.section===q.section);
+    if(state.seed)list=seededShuffle(list,state.seed+hashStr(q.section));
+    view={page:'quiz',o:{sec:q.section,mode:'seq'},list,idx:list.findIndex(x=>x.id===id),answered:null};
+    renderQ();window.scrollTo(0,0);
+  });
+}
+</script>
+</body>
+</html>
